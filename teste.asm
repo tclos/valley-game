@@ -7,14 +7,19 @@ LF		equ		10
 ;---------------DADOS			
 		.data
 
-buffer db 60 dup('O')
+buffer db 65 dup('O')
+score_str db 6 dup(0)
 endbuf db CR, LF, '$'
 left	   db 20
 largura      db 20 
 shipPos    db 30
-x	db 10
-score db 0
+x	dw 10
+score dw 0
+score_buffer db 10 dup('$')
+scorenum dw 12345
+scoretest db 'score: ', '$'
 dificulade_count db 0
+mult_variacao dw 1
 
 f db 0
 ;---------------CODIGO
@@ -40,7 +45,10 @@ again:
 		rep stosb
 		
 		;Atualiza posicao dos vales
+		mov cx, mult_variacao
+loop_variacao:
 		call update_valley_position
+		loop loop_variacao
 		;call move_test
 		
 		; Desenha o vale
@@ -48,6 +56,10 @@ again:
 		
 		; Desenha a nave
 		;call desenha_nave
+		
+		
+		
+		
 		
 		
 
@@ -79,20 +91,25 @@ update_valley_position proc near
 
 	;---------------------------------------------------------------------
 	; Funcao randomica
+	; Função para gerar um número pseudo-aleatório entre 0, 1 e 2
+	call random_number
 
-	cmp f, 0
-	JE	esquerda
-direita:
-		cmp left, 39		;testar o limite
-		jne  move_vale_right
+
+;-----------------------------------
+; Vai da esquerda pra direita, zig-zag dos vales para teste
+;	cmp f, 0
+;	JE	esquerda
+;direita:
+;		cmp left, 39		;testar o limite
+;		jne  move_vale_right
 		
-		mov f, 0
-		jmp done
-esquerda:
-		cmp left, 1
-		jne move_vale_left
-		mov f, 1
-		jmp done
+;		mov f, 0
+;		jmp done
+;esquerda:
+;		cmp left, 1
+;		jne move_vale_left
+;		mov f, 1
+;		jmp done
 	
 	;--------------------------------------------------------------------
     ; Atualiza a posição do vale de acordo com o resultado
@@ -122,7 +139,7 @@ move_left:
 	; Movimenta a nave para a esquerda
 	mov bl, left
 	cmp shipPos, bl      ; verifica se a nave colidiu com o vale esquerdo
-	jl finish
+	;jl finish
 	cmp shipPos, 1  ; Verifica se a nave está no limite esquerdo
 	jle again  ; Se estiver no limite, não move
 	dec shipPos
@@ -133,7 +150,7 @@ move_right:
 	mov bl, left
 	add bl, largura
 	cmp shipPos, bl      ; verifica se a nave colidiu com o vale direito
-	jg finish
+	;jg finish
 	cmp shipPos, 58  ; Verifica se a nave está no limite direito (considerando largura da tela de 60 colunas)
 	jge again  ; Se estiver no limite, não move
 	inc shipPos
@@ -189,18 +206,21 @@ desenha_jogo proc near
 	mov [di], al  ; Desenha a nave na posição
 	inc score
 	inc dificulade_count
+	
+	; aumenta dificuldade a cada 100 pts
+	call aumentar_dificuldade
 	;*********************
 	mov bl, left
 	cmp shipPos, bl      ; verifica se a nave colidiu com o vale esquerdo
-	jl finish
+	;jl finish
 	
 	mov bl, left
 	add bl, largura
 	cmp shipPos, bl      ; verifica se a nave colidiu com o vale direito
-	jg finish
+	;jg finish
 	;*********************
 	;---------------------------------
-	
+	call exibir_score
 	call printbuf
 	ret
 desenha_jogo endp
@@ -242,18 +262,129 @@ delay_loop:
     ret
 delay endp
 
+
 aumentar_dificuldade proc near
 	cmp dificulade_count, 100
-	je aumentar
-aumentar:
-	cmp largura, 5
-	je dificuldade_fim
-	dec largura
+	jge aumentar_largura
+	jmp dificuldade_fim
+aumentar_largura:
 	mov	dificulade_count, 0
+	cmp largura, 5
+	je aumentar_variacao
+	dec largura
+aumentar_variacao:
+	cmp mult_variacao, 4
+	je dificuldade_fim
+	inc mult_variacao
+	
 dificuldade_fim:
 	ret
 aumentar_dificuldade endp
 
+
+
+; Função para gerar um número pseudo-aleatório entre 0, 1 e 2
+random_number proc near
+    ; x = (x * 9 + 7) % 251
+	;mov dx, 0
+    mov ax, x            ; Carrega a semente em AX
+    mov bx, 9           ; Multiplica por 9
+	imul bx
+    add ax, 9            ; Soma 7
+    mov bx, 251          ; Divisor para o cálculo do módulo
+    div bx               ; AX = AX / BX, DX = resto (módulo)
+	
+	mov bx, 250
+	add dx, bx
+	
+    mov x, dx            ; Atualiza a semente com o valor de DX
+
+    ; Gera um número entre 0 e 2
+    mov ax, dx           ; Coloca o valor do módulo (que é entre 0 e 250) em AX
+	xor dx, dx           ; Limpa o valor de DX antes da próxima divisão
+    mov bx, 3            ; Queremos dividir por 3 para ter um número entre 0 e 2
+    div bx               ; AX = AX / BX, DX = resto (módulo)
+    mov al, dl           ; O resto (DX) será o número aleatório entre 0 e 2
+
+    ret
+random_number endp
+
+exibir_score proc near
+    ; Define a posição do cursor no topo direito (coluna 75, linha 0)
+    mov ah, 02h
+    mov bh, 0
+    mov dh, 1         ; Linha 0 (topo da tela)
+    mov dl, 65         ; Coluna 75 (direita da tela)
+    int 10h            ; Chama a interrupção de vídeo para mover o cursor
+	
+	; Exibe a string "score: "
+    lea dx, scoretest
+    mov ah, 09h
+    int 21h
+
+    ; Converte o valor do score em string
+    lea si, score_buffer  ; Aponta para o buffer onde será armazenada a string do score
+    mov ax, score    ; Carrega o valor do score
+    call int_to_str    ; Converte o valor em string
+
+    ; Exibe a string do score
+    mov ah, 09h
+    ;lea dx, scoretest
+	lea dx, score_buffer
+    int 21h
+
+    ; Retorna o cursor para a posição inicial do jogo (linha 1, coluna 0)
+    mov ah, 02h
+    mov bh, 0
+    mov dh, 24          ; Linha 1, logo abaixo do score
+    mov dl, 0          ; Coluna 0, início da linha
+    int 10h            ; Chama a interrupção de vídeo para mover o cursor
+
+    ret
+exibir_score endp
+
+; Função para converter um número de 16 bits em uma string
+int_to_str proc near
+    ; Supondo que o número esteja em AL e queremos convertê-lo para uma string
+    xor cx, cx         ; Limpa CX (contador de dígitos)
+    mov bx, 10         ; Divisor para a divisão por 10
+    mov si, offset score_buffer ; Carrega o endereço de 'buffer' em SI
+    mov di, si         ; DI será usado para armazenar o número final
+
+convert_loop:
+    xor dx, dx         ; Limpa AH para divisão correta
+    div bx             ; Divide AL por 10, resto em AH
+    add dl, '0'        ; Converte o dígito em caractere ASCII
+    mov [di], dl       ; Armazena o dígito na string
+    inc di             ; Move o ponteiro para a próxima posição
+    inc cx             ; Incrementa o contador de dígitos
+    test ax, ax        ; Verifica se AL é zero
+    jnz convert_loop   ; Se não for zero, continua o loop
+
+    ; Adiciona o terminador de string
+    mov byte ptr [di], '$'
+
+    ; Reverte a string, pois os dígitos estão na ordem inversa
+    mov si, offset score_buffer
+    dec di             ; Ajusta DI para o último caractere válido
+    mov bx, cx         ; BX contém o número de dígitos
+
+reverse_loop:
+	cmp si, di         ; Verifica se os ponteiros se cruzaram
+    jae reverse_fim   ; Se sim, termina a inversão
+    mov al, [si]       ; Carrega o caractere atual
+	mov dl, [di]
+    mov [di], al       ; Armazena o caractere na posição final
+	mov [si], dl
+    inc si             ; Avança o ponteiro de início
+    dec di             ; Retrocede o ponteiro de fim
+    ;dec bx             ; Decrementa o contador de dígitos
+    jnz reverse_loop   ; Continua até todos os dígitos serem revertidos
+
+    mov byte ptr [di], '$' ; Termina a string com '$'
+reverse_fim:
+    ret
+int_to_str endp
 
 ;---------------FIM_END
 		end
