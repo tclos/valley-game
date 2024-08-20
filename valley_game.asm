@@ -117,7 +117,7 @@ move_right:
 	; Movimenta a nave para a direita
 	mov bl, left1
 	add bl, largura1
-	cmp nave_pos, 58  ; Verifica se a nave está no limite direito (considerando largura da tela de 60 colunas)
+	cmp nave_pos, 63  ; Verifica se a nave está no limite direito (considerando largura da tela de 60 colunas)
 	jge again  ; Se estiver no limite, não move
 	inc nave_pos
 	jmp again	
