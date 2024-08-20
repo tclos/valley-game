@@ -8,10 +8,21 @@ LF		equ		10
 ;-----------------------------------------DADOS-------------------------------------------------------------
 		.data
 
-buffer db 65 dup('O')		; buffer com o desenho do vale
+buffer db 65 dup(08ch) ; î  buffer com o desenho do vale
 endbuf db CR, LF, '$'
-left	   db 20			; armazena o limite esquerdo do vale
-largura      db 20 			; largura do vale
+left1	   db 20			; armazena o limite esquerdo do vale
+left2	   db 20
+left3	   db 20
+left4	   db 20
+left5	   db 20
+left6	   db 20
+largura1    db 20 			; largura do vale
+largura2    db 20
+largura3    db 20
+largura4    db 20
+largura5    db 20
+largura6    db 20
+
 nave_pos    db 30			; posicao nave
 x	dw 10					; var usada para geração do num aleatorio
 score dw 0					; armazena o score (profundidade)
@@ -46,8 +57,8 @@ again:
 	call delay
 	
 		
-	; Preencher o vale (buffer) com 'O'
-	mov	al,'O'
+	; Preencher o vale (buffer) com o caractere
+	mov	al, 08ch	; î
 	mov cx, 60
 	lea DI,buffer
 	rep stosb
@@ -59,11 +70,13 @@ loop_variacao:
 	call atualizar_posicao_vale 		;Atualiza posicao dos vales
 	loop loop_variacao
 
-
 	; Desenha o vale
 	call atualiza_jogo
+
 	; Desenha a nave
 	call desenha_nave
+	
+	call atualiza_lookahead
 		
 ;-----------------Tratamento do teclado---------------------------------
 	; Captura a tecla pressionada diretamente
@@ -94,7 +107,7 @@ loop_variacao:
 
 move_left:
 	; Movimenta a nave para a esquerda
-	mov bl, left
+	mov bl, left1
 	cmp nave_pos, 1  ; Verifica se a nave está no limite esquerdo
 	jle again  ; Se estiver no limite, não move
 	dec nave_pos
@@ -102,8 +115,8 @@ move_left:
 
 move_right:
 	; Movimenta a nave para a direita
-	mov bl, left
-	add bl, largura
+	mov bl, left1
+	add bl, largura1
 	cmp nave_pos, 58  ; Verifica se a nave está no limite direito (considerando largura da tela de 60 colunas)
 	jge again  ; Se estiver no limite, não move
 	inc nave_pos
@@ -134,6 +147,37 @@ finish:
 
 ;---------------------------------------FUNCOES-----------------------------------------------------------------
 
+;Função para atualizar as variaveis que tem os dados da linha
+atualiza_lookahead proc near
+	mov al, left5 	; linha 5 é usada para checar colisao entre nave e montanhas
+	mov left6, al
+	mov al, left4 
+	mov left5, al
+	mov al, left3 
+	mov left4, al
+	mov al, left2 
+	mov left3, al
+	mov al, left1 
+	mov left2, al
+	
+	mov al, largura5 
+	mov largura6, al
+	mov al, largura4 
+	mov largura5, al
+	mov al, largura3 
+	mov largura4, al
+	mov al, largura2 
+	mov largura3, al
+	mov al, largura1 
+	mov largura2, al
+	
+	ret
+atualiza_lookahead endp
+
+
+
+
+
 ; Funcao que atualiza os limites do vale
 atualizar_posicao_vale proc near
 	call random_number			; Função para gerar um número pseudo-aleatório entre 0, 1 e 2
@@ -145,17 +189,20 @@ atualizar_posicao_vale proc near
     jmp done
 	
 move_vale_left:
-    cmp left, 1     ; Verifica o limite esquerdo
+    cmp left1, 1     ; Verifica o limite esquerdo
     jle done
-    dec left
+	
+    dec left1
     jmp done
 
 move_vale_right:
 	mov bl, 65       ; 65 eh a qntd de colunas usadass
-	sub bl, largura
-    cmp left, bl    ; Verifica o limite direito
+	sub bl, largura1
+    cmp left1, bl    ; Verifica o limite direito
     jge done
-    inc left
+
+	
+    inc left1
     jmp done
 	
 done:
@@ -170,7 +217,7 @@ desenha_nave proc near
 	; Configuração do registrador para a posição da nave na tela
     mov ah, 02h               ; Função para mover o cursor
     mov bh, 0                 ; pagina 0
-    mov dh, 23                ; penultima linha mais de baixo
+    mov dh, 19                ; penultima linha mais de baixo
     mov dl, nave_pos           ; Coluna 
     int 10h                   ; Chama a interrupção para mover o cursor
 
@@ -219,18 +266,17 @@ desenha_nave endp
 
 ; gera o vale no buffer, checa colisao, exibe score e hp, aumenta dificuldade e desenha o jogo
 atualiza_jogo proc near
-
 	;------------Desenha o vale--------------------------
 	mov	al,' '       ; ' ' representa o vale
-	mov cl, largura  ; Serve como contador, subtraido no rep stosb
+	mov cl, largura1  ; Serve como contador, subtraido no rep stosb
 	mov bh, 0
-	mov bl, left	; carregando o limite esquerdo no reg. b
+	mov bl, left1	; carregando o limite esquerdo no reg. b
 	lea DI,[buffer+bx]  ; carregando o EA de onde o vale começa
 	rep stosb
 	
 	inc score            ; a cada linha, incrementa a pontuacao
 	inc dificuldade_count   ; variavel que conta até 100 pra aumentar a dificuldade
-	
+
 	; aumenta dificuldade a cada 100 pts
 	call aumentar_dificuldade
 	
@@ -254,10 +300,10 @@ atualiza_jogo endp
 
 ; Poe na tela uma string (string formada pelas montanhas e vale)
 printbuf proc near
-		mov ah, 9h
-		lea dx, buffer
-		int 21h
-		ret
+	mov ah, 9h
+	lea dx, buffer
+	int 21h
+	ret
 printbuf endp
 
 
@@ -281,9 +327,10 @@ aumentar_dificuldade proc near
 	jmp dificuldade_fim
 aumentar_largura:
 	mov	dificuldade_count, 0
-	cmp largura, 5					; Verificação para a largura não ser menor que 5
+	cmp largura1, 5					; Verificação para a largura não ser menor que 5
 	je aumentar_variacao
-	dec largura
+	
+	dec largura1
 aumentar_variacao:
 	cmp mult_variacao, 4            ; Verificação para a variacao max não ser maior que 4
 	je powerup_check
@@ -293,7 +340,7 @@ powerup_check:
 	cmp powerup_flag, 1				; se o powerup estiver ativado, nao fazer nada
 	je dificuldade_fim
 	inc powerup_count				
-	cmp powerup_count, 5			; contagem até 500 linhas para disponibilizar o POWERUP
+	cmp powerup_count, 3			; contagem até 500 linhas para disponibilizar o POWERUP
 	jne dificuldade_fim
 	mov powerup_count, 0			; Chegou em 500 -> reseta contador do powerup e torna ele disponivel
 	mov powerup_available, 1
@@ -503,12 +550,12 @@ checar_colisao proc near
 	cmp powerup_flag, 1			; se powerup ativo, nave indestrutivel
 	je checar_colisao_false
 
-	mov bl, left
+	mov bl, left5
 	cmp nave_pos, bl     	 ; verifica se a nave colidiu com a montanha esquerda
 	jl checar_colisao_true
 	
-	mov bl, left
-	add bl, largura
+	mov bl, left5
+	add bl, largura5
 	sub bl, 1               ; left + largura - 1 para a posicao da montanha direita
 	cmp nave_pos, bl      	; verifica se a nave colidiu com a montanha direita
 	jg checar_colisao_true   
@@ -539,6 +586,8 @@ cor_vermelha proc near
     mov cx, 2000          ; num de caracteres a serem mudados (80x25 = 2000 caracteres na tela)
     mov bl, 0Ch           ; cor: 0 -> background preto, C -> char vermelho
     int 10h               ; Chama a interrupção para mudar cor
+
+	
     ret
 cor_vermelha endp
 
